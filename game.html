@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>節奏點擊王 (Vercel版)</title>
+    <title>節奏點擊王 (JPG修正版)</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -66,7 +66,6 @@
             cursor: pointer;
             -webkit-tap-highlight-color: transparent;
             animation: popUp 0.1s ease-out;
-            /* 禁止圖片被拖曳 */
             user-select: none;
             -webkit-user-drag: none;
         }
@@ -155,12 +154,15 @@
 
     <script>
         // ============================================
-        // 重要：請將之前取得的 Google Apps Script 網址貼在下方
+        // ★ 請在這裡貼上你的 Google Apps Script 網址
         const API_URL = "https://script.google.com/macros/s/你的網址/exec";
         
-        // 圖片檔案名稱 (相對路徑)
-        const TARGET_IMAGE_URL = "./target.png"; 
+        // ★ 圖片檔名已修改為 .jpg (請確保你的檔案是小寫 target.jpg)
+        const TARGET_IMAGE_URL = "./target.jpg"; 
         // ============================================
+
+        // 備用圖片 (如果找不到 jpg 會自動顯示這個)
+        const BACKUP_IMAGE_URL = "https://cdn-icons-png.flaticon.com/512/148/148836.png";
 
         const POINTS_PER_HIT = 15;
         const GAME_DURATION = 30;
@@ -182,7 +184,6 @@
         let spawnTimer = null;
         let gameTimer = null;
 
-        // 頁面載入時先抓一次排行榜
         fetchLeaderboard();
 
         startBtn.addEventListener('click', startGame);
@@ -197,7 +198,6 @@
             scoreEl.innerText = 0; timeEl.innerText = timeLeft;
             overlayScreen.style.display = 'none'; resultMsg.style.display = 'none'; inputArea.style.display = 'none';
             
-            // 播放音樂
             bgm.currentTime = 0; 
             bgm.play().catch(e => console.log("音樂播放需互動"));
 
@@ -208,8 +208,18 @@
         function spawnTarget() {
             if(!isPlaying) return;
             const img = document.createElement('img');
+            
+            // 設定圖片來源
             img.src = TARGET_IMAGE_URL;
             img.className = 'target';
+
+            // 防錯機制：找不到圖片就換備用圖
+            img.onerror = function() {
+                console.log("找不到圖片，已切換為備用圖");
+                this.src = BACKUP_IMAGE_URL;
+                this.onerror = null; 
+            };
+
             const maxX = gameArea.clientWidth - 80;
             const maxY = gameArea.clientHeight - 80;
             const randomX = Math.floor(Math.random() * maxX);
@@ -261,13 +271,12 @@
             uploadScore(playerName, score);
         }
 
-        // --- 雲端排行榜功能 (AJAX) ---
+        // --- 排行榜 API ---
 
         function uploadScore(name, score) {
             rankList.innerHTML = '<div class="loading">分數上傳中...</div>';
             startBtn.disabled = true;
 
-            // Vercel 有時候對 CORS 很嚴格，這裡使用最兼容的寫法
             const url = `${API_URL}?action=add&name=${encodeURIComponent(name)}&score=${score}`;
             
             fetch(url)
@@ -278,7 +287,6 @@
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    // 即使失敗也允許重玩
                     rankList.innerHTML = '<div style="color:red">連線不穩，請稍後</div>';
                     startBtn.disabled = false;
                 });
