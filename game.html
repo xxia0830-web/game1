@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>節奏點擊王 (Vercel版)</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --neon-green: #00ff00;
+            --text-color: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #000000 100%);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .info-board {
+            display: flex;
+            justify-content: space-between;
+            width: 90%;
+            max-width: 400px;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        .score-box { text-shadow: 0 0 10px var(--neon-blue); }
+        .time-box { text-shadow: 0 0 10px var(--neon-pink); color: var(--neon-pink); }
+
+        #game-area {
+            position: relative;
+            width: 95vw;
+            height: 60vh;
+            max-width: 600px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--neon-blue);
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+            overflow: hidden;
+        }
+
+        .target {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--neon-pink);
+            box-shadow: 0 0 15px var(--neon-pink);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            animation: popUp 0.1s ease-out;
+            /* 禁止圖片被拖曳 */
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .hit-effect {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(1.2);
+            pointer-events: none;
+            animation: fadeOut 0.2s forwards;
+        }
+
+        @keyframes popUp { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes fadeOut { 100% { opacity: 0; transform: scale(1.5); } }
+
+        #overlay-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100; padding: 20px; box-sizing: border-box;
+            backdrop-filter: blur(5px);
+        }
+
+        input[type="text"] {
+            padding: 10px; font-size: 1.2rem; margin: 15px 0; border-radius: 8px;
+            border: 2px solid var(--neon-blue); background: rgba(0, 0, 0, 0.5);
+            color: white; text-align: center; outline: none;
+        }
+
+        button {
+            padding: 12px 35px; font-size: 1.3rem; background: var(--neon-blue); color: #000;
+            border: none; border-radius: 50px; font-weight: bold;
+            box-shadow: 0 0 20px var(--neon-blue); margin-top: 10px; cursor: pointer;
+            transition: all 0.2s;
+        }
+        button:active { transform: scale(0.95); }
+        button:disabled { background: #555; box-shadow: none; cursor: not-allowed; }
+
+        #leaderboard {
+            margin-top: 20px; width: 100%; max-width: 300px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 10px;
+            padding: 15px; border: 1px solid var(--neon-green);
+        }
+        #leaderboard h3 { margin: 0 0 10px 0; text-align: center; color: var(--neon-green); }
+        .rank-item { display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.2); padding: 8px 0; }
+        .rank-item:last-child { border-bottom: none; }
+        .rank-name { flex-grow: 1; text-align: left; padding-left: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .rank-score { color: var(--neon-pink); font-weight: bold; }
+        
+        .loading { text-align: center; color: var(--neon-blue); font-size: 0.9rem; margin-top: 5px; animation: blink 1s infinite;}
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="info-board">
+        <div class="score-box">分數: <span id="score">0</span></div>
+        <div class="time-box">時間: <span id="time">30</span></div>
+    </div>
+
+    <div id="game-area"></div>
+
+    <div id="overlay-screen">
+        <h1 style="color:white; margin:0 0 10px 0; text-shadow:0 0 10px var(--neon-blue); font-style:italic;">NEON STRIKE</h1>
+        <div id="input-area">
+            <input type="text" id="player-name" placeholder="輸入你的名字" maxlength="8">
+            <br><button id="start-btn">開始挑戰</button>
+        </div>
+        <h2 id="result-msg" style="display:none; color: var(--neon-pink); margin: 10px 0;">時間到！</h2>
+        
+        <div id="leaderboard">
+            <h3>🏆 全球排行榜</h3>
+            <div id="rank-list"><div class="loading">連線資料庫中...</div></div>
+        </div>
+        <p style="color:#666; font-size:0.8rem; margin-top:20px;">*資料同步至 Google 雲端</p>
+    </div>
+
+    <audio id="bgm" loop>
+        <source src="./bgm.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // ============================================
+        // 重要：請將之前取得的 Google Apps Script 網址貼在下方
+        const API_URL = "https://script.google.com/macros/s/你的網址/exec";
+        
+        // 圖片檔案名稱 (相對路徑)
+        const TARGET_IMAGE_URL = "./target.png"; 
+        // ============================================
+
+        const POINTS_PER_HIT = 15;
+        const GAME_DURATION = 30;
+
+        const gameArea = document.getElementById('game-area');
+        const scoreEl = document.getElementById('score');
+        const timeEl = document.getElementById('time');
+        const overlayScreen = document.getElementById('overlay-screen');
+        const startBtn = document.getElementById('start-btn');
+        const nameInput = document.getElementById('player-name');
+        const resultMsg = document.getElementById('result-msg');
+        const rankList = document.getElementById('rank-list');
+        const bgm = document.getElementById('bgm');
+        const inputArea = document.getElementById('input-area');
+
+        let score = 0;
+        let timeLeft = GAME_DURATION;
+        let isPlaying = false;
+        let spawnTimer = null;
+        let gameTimer = null;
+
+        // 頁面載入時先抓一次排行榜
+        fetchLeaderboard();
+
+        startBtn.addEventListener('click', startGame);
+        startBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startGame(); });
+
+        function startGame() {
+            const playerName = nameInput.value.trim();
+            if (!playerName) { alert("請先輸入名字！"); return; }
+            if(isPlaying) return;
+            isPlaying = true;
+            score = 0; timeLeft = GAME_DURATION;
+            scoreEl.innerText = 0; timeEl.innerText = timeLeft;
+            overlayScreen.style.display = 'none'; resultMsg.style.display = 'none'; inputArea.style.display = 'none';
+            
+            // 播放音樂
+            bgm.currentTime = 0; 
+            bgm.play().catch(e => console.log("音樂播放需互動"));
+
+            gameTimer = setInterval(countDown, 1000);
+            spawnTimer = setInterval(spawnTarget, 500); 
+        }
+
+        function spawnTarget() {
+            if(!isPlaying) return;
+            const img = document.createElement('img');
+            img.src = TARGET_IMAGE_URL;
+            img.className = 'target';
+            const maxX = gameArea.clientWidth - 80;
+            const maxY = gameArea.clientHeight - 80;
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+            img.style.left = randomX + 'px'; img.style.top = randomY + 'px';
+
+            const handleHit = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                score += POINTS_PER_HIT;
+                scoreEl.innerText = score;
+                createEffect(randomX, randomY);
+                img.remove();
+            };
+            img.addEventListener('touchstart', handleHit, {passive: false});
+            img.addEventListener('mousedown', handleHit);
+            gameArea.appendChild(img);
+            setTimeout(() => { if(img.parentNode) img.remove(); }, 470);
+        }
+
+        function createEffect(x, y) {
+            const effect = document.createElement('div');
+            effect.className = 'hit-effect';
+            effect.style.left = x + 'px'; effect.style.top = y + 'px';
+            gameArea.appendChild(effect);
+            setTimeout(() => effect.remove(), 200);
+        }
+
+        function countDown() {
+            timeLeft--;
+            timeEl.innerText = timeLeft;
+            if(timeLeft <= 0) endGame();
+        }
+
+        function endGame() {
+            isPlaying = false;
+            clearInterval(gameTimer);
+            clearInterval(spawnTimer);
+            bgm.pause();
+            gameArea.innerHTML = '';
+
+            const playerName = nameInput.value.trim();
+            
+            overlayScreen.style.display = 'flex';
+            resultMsg.style.display = 'block';
+            resultMsg.innerText = `時間到！${playerName} 得分: ${score}`;
+            inputArea.style.display = 'block'; 
+            startBtn.innerText = "再來一局";
+
+            uploadScore(playerName, score);
+        }
+
+        // --- 雲端排行榜功能 (AJAX) ---
+
+        function uploadScore(name, score) {
+            rankList.innerHTML = '<div class="loading">分數上傳中...</div>';
+            startBtn.disabled = true;
+
+            // Vercel 有時候對 CORS 很嚴格，這裡使用最兼容的寫法
+            const url = `${API_URL}?action=add&name=${encodeURIComponent(name)}&score=${score}`;
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    console.log("上傳成功", data);
+                    fetchLeaderboard();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // 即使失敗也允許重玩
+                    rankList.innerHTML = '<div style="color:red">連線不穩，請稍後</div>';
+                    startBtn.disabled = false;
+                });
+        }
+
+        function fetchLeaderboard() {
+            rankList.innerHTML = '<div class="loading">讀取排行榜...</div>';
+            
+            const url = `${API_URL}?action=get`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    updateLeaderboardUI(data);
+                    startBtn.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    rankList.innerHTML = '<div style="color:#aaa;">讀取失敗</div>';
+                    startBtn.disabled = false;
+                });
+        }
+
+        function updateLeaderboardUI(records) {
+            rankList.innerHTML = ""; 
+            if (records.length === 0) {
+                rankList.innerHTML = "<div style='text-align:center; color:#aaa;'>目前無人上榜</div>";
+                return;
+            }
+
+            records.forEach((rec, index) => {
+                const item = document.createElement('div');
+                item.className = 'rank-item';
+                item.innerHTML = `
+                    <span class="rank-num">${index + 1}.</span>
+                    <span class="rank-name">${escapeHtml(rec.name)}</span>
+                    <span class="rank-score">${rec.score}</span>
+                `;
+                rankList.appendChild(item);
+            });
+        }
+
+        function escapeHtml(text) {
+            if(!text) return text;
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
